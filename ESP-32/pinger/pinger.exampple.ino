@@ -7,7 +7,7 @@ const char* password = "pwd";
 const char* mqtt_server = "0.0.0.0"; 
 
 const int mqtt_port = 1883;
-const char* mqtt_topic = "zona/benevento/heartbeat";
+const char* mqtt_topic = "zona/campagna/heartbeat";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
