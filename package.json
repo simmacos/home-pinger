@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "mqtt": "^5.13.2",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "@types/mqtt": "^0.0.34",
+    "@types/socket.io": "^3.0.1"
+  }
+}

@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home Dashboard - Benevento</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f7;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .location {
+            color: #666;
+            font-size: 18px;
+        }
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .heartbeat-indicator {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #ccc;
+            display: inline-block;
+            margin-right: 10px;
+            transition: all 0.3s ease;
+        }
+        .heartbeat-indicator.online {
+            background: #34c759;
+        }
+        .heartbeat-indicator.flash {
+            background: #ff3b30 !important;
+            box-shadow: 0 0 20px #ff3b30;
+            transform: scale(1.2);
+        }
+        .status-online { color: #34c759; }
+        .status-offline { color: #ff3b30; }
+        .chart-container {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            height: 400px;
+        }
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .metric:last-child {
+            border-bottom: none;
+        }
+        .metric-label {
+            color: #666;
+        }
+        .metric-value {
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏠 Home Dashboard</h1>
+            <div class="location">📍 Benevento, Campania</div>
+        </div>
+
+        <div class="cards">
+            <!-- Status Card -->
+            <div class="card">
+                <h3>⚡ Stato Corrente</h3>
+                <div class="metric">
+                    <span class="metric-label">Status:</span>
+                    <span class="metric-value">
+                        <span class="heartbeat-indicator" id="heartbeat-indicator"></span>
+                        <span id="power-status" class="status-offline">Offline</span>
+                    </span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Ultimo Heartbeat:</span>
+                    <span class="metric-value" id="last-heartbeat">-</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Counter:</span>
+                    <span class="metric-value" id="heartbeat-counter">0</span>
+                </div>
+            </div>
+
+            <!-- ESP32 Info -->
+            <div class="card">
+                <h3>📡 ESP32 Info</h3>
+                <div class="metric">
+                    <span class="metric-label">IP:</span>
+                    <span class="metric-value" id="esp32-ip">-</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">RSSI:</span>
+                    <span class="metric-value" id="esp32-rssi">-</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Uptime:</span>
+                    <span class="metric-value" id="esp32-uptime">-</span>
+                </div>
+            </div>
+
+            <!-- MQTT Status -->
+            <div class="card">
+                <h3>🔌 MQTT Status</h3>
+                <div class="metric">
+                    <span class="metric-label">Connesso:</span>
+                    <span class="metric-value" id="mqtt-connected">-</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Host:</span>
+                    <span class="metric-value" id="mqtt-host">-</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Topic:</span>
+                    <span class="metric-value" id="mqtt-topic">-</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="chart-container">
+            <h3>📊 Uptime Settimanale</h3>
+            <canvas id="uptimeChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const socket = io('http://localhost:3000');
+        
+        // Elementi DOM
+        const indicator = document.getElementById('heartbeat-indicator');
+        const powerStatus = document.getElementById('power-status');
+        const lastHeartbeat = document.getElementById('last-heartbeat');
+        const counter = document.getElementById('heartbeat-counter');
+        const esp32Ip = document.getElementById('esp32-ip');
+        const esp32Rssi = document.getElementById('esp32-rssi');
+        const esp32Uptime = document.getElementById('esp32-uptime');
+        
+        // Socket.io events
+        socket.on('heartbeat_received', (data) => {
+            console.log('💓 Heartbeat ricevuto:', data);
+            
+            // Flash indicatore
+            indicator.classList.add('flash');
+            setTimeout(() => indicator.classList.remove('flash'), 500);
+            
+            // Aggiorna status
+            indicator.classList.add('online');
+            powerStatus.textContent = 'Online';
+            powerStatus.className = 'status-online';
+            
+            // Aggiorna dati
+            counter.textContent = data.counter;
+            lastHeartbeat.textContent = new Date(data.timestamp).toLocaleTimeString('it-IT');
+            esp32Ip.textContent = data.ip;
+            esp32Rssi.textContent = `${data.rssi} dBm`;
+            esp32Uptime.textContent = `${Math.floor(data.uptime/1000)}s`;
+        });
+        
+        socket.on('connect', () => {
+            console.log('✅ Connesso al backend');
+        });
+        
+        // Carica dati iniziali
+        async function loadInitialData() {
+            try {
+                // Status
+                const statusRes = await fetch('/api/status');
+                const status = await statusRes.json();
+                
+                document.getElementById('mqtt-connected').textContent = status.mqtt.connected ? 'Sì' : 'No';
+                document.getElementById('mqtt-host').textContent = `${status.mqtt.host}:${status.mqtt.port}`;
+                document.getElementById('mqtt-topic').textContent = status.mqtt.topic;
+                
+                // Uptime chart
+                const uptimeRes = await fetch('/api/uptime');
+                const uptime = await uptimeRes.json();
+                createUptimeChart(uptime);
+                
+            } catch (error) {
+                console.error('Errore caricamento dati:', error);
+            }
+        }
+        
+        // Crea grafico uptime
+        function createUptimeChart(data) {
+            const ctx = document.getElementById('uptimeChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        label: 'Uptime %',
+                        data: data.daily,
+                        backgroundColor: 'rgba(52, 199, 89, 0.8)',
+                        borderColor: 'rgba(52, 199, 89, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Carica dati all'avvio
+        loadInitialData();
+        
+        // Refresh dati ogni 30 secondi
+        setInterval(loadInitialData, 30000);
+    </script>
+</body>
+</html>
