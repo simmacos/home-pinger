@@ -13,3 +13,13 @@ export interface HeartbeatRecord {
   data: HeartbeatData;
   status: 'online' | 'offline';
 }
+
+
+export interface DatabaseSchema {
+  heartbeats: HeartbeatRecord[];
+  lastPing: string | null;
+  stats: {
+    totalHeartbeats: number;
+    startTime: string;
+  };
+}

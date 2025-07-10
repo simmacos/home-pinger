@@ -1,8 +1,8 @@
-// src/services/mqtt.ts
 import mqtt, { MqttClient } from 'mqtt';
 import { Server } from 'socket.io';
 import { HeartbeatData, HeartbeatRecord} from '../types/types';
 import { config } from 'dotenv';
+import { DatabaseService } from './database'; 
 import path from 'path';
 
 config({ path: path.resolve(__dirname, '../../.env') });
@@ -12,6 +12,7 @@ export class MqttService {
   private client: MqttClient | null = null;
   private io: Server | null = null;
   private isConnected = false;
+  private db: DatabaseService;
   private lastHeartbeat: Date | null = null;
   private reconnectAttempts = 0;
   private readonly maxReconnectAttempts = 5;
@@ -25,7 +26,8 @@ export class MqttService {
     connectTimeout: 30000
   };
 
-  constructor() {
+  constructor(db: DatabaseService) {
+    this.db = db;
     console.log('📡 MQTT Service inizializzato');
     console.log(`📍 Configurazione: ${this.config.host}:${this.config.port}`);
     console.log(`📬 Topic: ${this.config.topic}`);
@@ -179,8 +181,7 @@ export class MqttService {
     return isValid;
   }
 
-  // Processa heartbeat valido
-  private processHeartbeat(data: HeartbeatData): void {
+  private async processHeartbeat(data: HeartbeatData): Promise<void> {
     const now = new Date();
     this.lastHeartbeat = now;
     
@@ -195,7 +196,14 @@ export class MqttService {
     console.log(`📡 ESP32 IP: ${data.ip}, RSSI: ${data.rssi}dBm`);
     console.log(`⏱️ Uptime ESP32: ${Math.floor(data.uptime/1000)}s`);
 
-    // Invia via Socket.io a tutti i client connessi
+    try {
+      await this.db.saveHeartbeat(heartbeatRecord);
+      console.log(`💾 Heartbeat salvato nel database`);
+    } catch (error) {
+      console.error('❌ Errore salvataggio database:', error);
+    }
+
+    // Socket.io rimane uguale...
     if (this.io) {
       this.io.emit('heartbeat_received', {
         id: heartbeatRecord.id,
@@ -205,12 +213,9 @@ export class MqttService {
         rssi: data.rssi,
         uptime: data.uptime,
         device: data.device,
-        real: true // Flag per distinguere da simulazione
+        real: true
       });
     }
-
-    // TODO: Salvare nel database
-    // await this.saveToDatabase(heartbeatRecord);
   }
 
   // Stato del servizio
