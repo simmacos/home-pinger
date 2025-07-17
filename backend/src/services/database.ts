@@ -1,25 +1,16 @@
-// src/services/database.ts - Versione LowDB v2 Completa
+// src/services/database.ts - Versione TypeScript Safe e Corretta
 import { DatabaseSchema, HeartbeatRecord } from '../types/types';
+import fs from 'fs/promises';
 import path from 'path';
 
-const { Low, JSONFile } = require('lowdb');
-
 export class DatabaseService {
-  private db: any; // Usa 'any' per v2 invece di Low<DatabaseSchema>
+  private readonly filePath: string;
+  private data: DatabaseSchema;
 
   constructor() {
-    const filePath = path.resolve(__dirname, '../data/db.json');
-    const adapter = new JSONFile(filePath);
-    
-    // Solo 1 parametro per LowDB v2
-    this.db = new Low(adapter);
-  }
-
-  async init(): Promise<void> {
-    await this.db.read();
-    
-    // Inizializzazione con ||= operator (v2 syntax)
-    this.db.data ||= {
+    this.filePath = path.resolve(__dirname, '../data/db.json');
+    // Inizializza con struttura di default
+    this.data = {
       heartbeats: [],
       lastPing: null,
       stats: {
@@ -27,70 +18,113 @@ export class DatabaseService {
         startTime: new Date().toISOString()
       }
     };
-    
-    await this.db.write();
-    console.log('📊 Database inizializzato');
+  }
+
+  // Metodo per leggere i dati dal file
+  private async read(): Promise<void> {
+    try {
+      const content = await fs.readFile(this.filePath, 'utf-8');
+      this.data = JSON.parse(content) as DatabaseSchema;
+    } catch (error: any) {
+      // Se il file non esiste, lo creiamo
+      if (error?.code === 'ENOENT') {
+        await this.write();
+      } else {
+        console.error('❌ Errore lettura database:', error);
+        // In caso di errore, usa dati di default
+        this.data = {
+          heartbeats: [],
+          lastPing: null,
+          stats: {
+            totalHeartbeats: 0,
+            startTime: new Date().toISOString()
+          }
+        };
+      }
+    }
+  }
+
+  // Metodo per scrivere i dati sul file
+  private async write(): Promise<void> {
+    try {
+      // Crea la directory se non esiste
+      await fs.mkdir(path.dirname(this.filePath), { recursive: true });
+      await fs.writeFile(this.filePath, JSON.stringify(this.data, null, 2));
+    } catch (error) {
+      console.error('❌ Errore scrittura database:', error);
+    }
+  }
+
+  async init(): Promise<void> {
+    await this.read();
+    console.log('📊 Database inizializzato con JSON nativo');
   }
 
   async saveHeartbeat(heartbeat: HeartbeatRecord): Promise<void> {
-    await this.db.read();
+    await this.read();
     
-    // Controllo e inizializzazione se necessario
-    if (!this.db.data) {
-      await this.init();
+    // Verifica che i dati esistano
+    if (!this.data.heartbeats) {
+      this.data.heartbeats = [];
     }
     
-    this.db.data.heartbeats.push(heartbeat);
-    this.db.data.lastPing = heartbeat.timestamp;
-    this.db.data.stats.totalHeartbeats++;
+    if (!this.data.stats) {
+      this.data.stats = {
+        totalHeartbeats: 0,
+        startTime: new Date().toISOString()
+      };
+    }
     
-    // Cleanup vecchi dati
+    this.data.heartbeats.push(heartbeat);
+    this.data.lastPing = heartbeat.timestamp;
+    this.data.stats.totalHeartbeats++;
+    
+    // Cleanup dei dati vecchi
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     
-    this.db.data.heartbeats = this.db.data.heartbeats.filter(
+    this.data.heartbeats = this.data.heartbeats.filter(
       (h: HeartbeatRecord) => new Date(h.timestamp) > thirtyDaysAgo
     );
     
-    await this.db.write();
+    await this.write();
   }
 
   async getLastHeartbeat(): Promise<HeartbeatRecord | null> {
-    await this.db.read();
+    await this.read();
     
-    if (!this.db.data || !this.db.data.heartbeats) return null;
+    // Controllo sicurezza per heartbeats
+    if (!this.data.heartbeats || this.data.heartbeats.length === 0) {
+      return null;
+    }
     
-    const heartbeats = this.db.data.heartbeats;
-    const lastHeartbeat = heartbeats[heartbeats.length - 1];
-    
-    return lastHeartbeat || null;
+    return this.data.heartbeats[this.data.heartbeats.length - 1] || null;
   }
 
   async getHeartbeatsLastMonth(): Promise<HeartbeatRecord[]> {
-    await this.db.read();
+    await this.read();
     
-    if (!this.db.data || !this.db.data.heartbeats) return [];
+    // Controllo sicurezza per heartbeats
+    if (!this.data.heartbeats || this.data.heartbeats.length === 0) {
+      return [];
+    }
     
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     
-    return this.db.data.heartbeats.filter(
+    return this.data.heartbeats.filter(
       (h: HeartbeatRecord) => new Date(h.timestamp) > thirtyDaysAgo
     );
   }
 
-  async getUptimeData(days = 7): Promise<{ label: string; uptime: string }[]> {
-    await this.db.read();
+  async getUptimeData(days: number = 7): Promise<{ label: string; uptime: string }[]> {
+    await this.read();
 
-    // Controllo sicurezza database
-    if (!this.db.data || !this.db.data.heartbeats) {
-      return [];
-    }
-
-    const heartbeats = this.db.data.heartbeats;
+    // Controllo sicurezza per heartbeats
+    const heartbeats = this.data.heartbeats || [];
     const dailyCount: { [key: string]: number } = {};
 
-    // Inizializza giorni
+    // Inizializza i giorni
     for (let i = 0; i < days; i++) {
       const date = new Date();
       date.setDate(date.getDate() - i);
@@ -101,53 +135,57 @@ export class DatabaseService {
       }
     }
 
-    // Conta heartbeat con controlli espliciti
+    // Conta heartbeat per giorno
     heartbeats.forEach((heartbeat: HeartbeatRecord) => {
       if (heartbeat && heartbeat.timestamp && typeof heartbeat.timestamp === 'string') {
-        const parts = heartbeat.timestamp.split('T');
+        const dateKey = heartbeat.timestamp.split('T')[0];
         
-        if (parts.length > 0 && parts[0]) {
-          const dateKey = parts[0];
-          
-          if (dateKey in dailyCount) {
-            dailyCount[dateKey] = (dailyCount[dateKey] || 0) + 1;
-          }
+        if (dateKey && dateKey in dailyCount) {
+          dailyCount[dateKey] = (dailyCount[dateKey] || 0) + 1;
         }
       }
     });
 
     // Genera risultato
-    const expectedPerDay = 8640;
+    const expectedPerDay = 8640; // 1 heartbeat ogni 10 secondi
     const result: { label: string; uptime: string }[] = [];
 
-    Object.keys(dailyCount).forEach(dateKey => {
+    // Ordina le chiavi per data
+    const sortedKeys = Object.keys(dailyCount).sort();
+    
+    for (const dateKey of sortedKeys) {
       const count = dailyCount[dateKey] || 0;
       const uptimePercentage = Math.min((count / expectedPerDay) * 100, 100);
+      
+      // Crea label leggibile
+      const date = new Date(dateKey);
+      const label = date.toLocaleDateString('it-IT', { weekday: 'short' }).toUpperCase();
+      
       result.push({
-        label: dateKey,
+        label: label,
         uptime: uptimePercentage.toFixed(1)
       });
-    });
+    }
 
-    result.sort((a, b) => a.label.localeCompare(b.label));
     return result;
   }
 
-  async getStats() {
-    await this.db.read();
+  async getStats(): Promise<{
+    totalHeartbeats: number;
+    lastPing: string | null;
+    dbSize: number;
+  }> {
+    await this.read();
     
-    if (!this.db.data) {
-      return {
-        totalHeartbeats: 0,
-        lastPing: null,
-        dbSize: 0
-      };
-    }
+    // Controlli sicurezza con valori di default
+    const totalHeartbeats = this.data.stats?.totalHeartbeats || 0;
+    const lastPing = this.data.lastPing || null;
+    const dbSize = this.data.heartbeats?.length || 0;
     
     return {
-      totalHeartbeats: this.db.data.stats.totalHeartbeats,
-      lastPing: this.db.data.lastPing,
-      dbSize: this.db.data.heartbeats.length
+      totalHeartbeats,
+      lastPing,
+      dbSize
     };
   }
 }
