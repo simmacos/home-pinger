@@ -1,17 +1,25 @@
-// src/services/database.ts
-import { Low } from 'lowdb'
-import { JSONFile } from 'lowdb/node'
+// src/services/database.ts - Versione LowDB v2 Completa
 import { DatabaseSchema, HeartbeatRecord } from '../types/types';
 import path from 'path';
 
+const { Low, JSONFile } = require('lowdb');
+
 export class DatabaseService {
-  private db: Low<DatabaseSchema>;
+  private db: any; // Usa 'any' per v2 invece di Low<DatabaseSchema>
 
   constructor() {
     const filePath = path.resolve(__dirname, '../data/db.json');
-    const adapter = new JSONFile<DatabaseSchema>(filePath);
+    const adapter = new JSONFile(filePath);
     
-    const defaultData: DatabaseSchema = {
+    // Solo 1 parametro per LowDB v2
+    this.db = new Low(adapter);
+  }
+
+  async init(): Promise<void> {
+    await this.db.read();
+    
+    // Inizializzazione con ||= operator (v2 syntax)
+    this.db.data ||= {
       heartbeats: [],
       lastPing: null,
       stats: {
@@ -20,11 +28,6 @@ export class DatabaseService {
       }
     };
     
-    this.db = new Low(adapter, defaultData);
-  }
-
-  async init(): Promise<void> {
-    await this.db.read();
     await this.db.write();
     console.log('📊 Database inizializzato');
   }
@@ -32,9 +35,9 @@ export class DatabaseService {
   async saveHeartbeat(heartbeat: HeartbeatRecord): Promise<void> {
     await this.db.read();
     
-    // Assicurati che this.db.data esista
+    // Controllo e inizializzazione se necessario
     if (!this.db.data) {
-      throw new Error('Database non inizializzato');
+      await this.init();
     }
     
     this.db.data.heartbeats.push(heartbeat);
@@ -46,7 +49,7 @@ export class DatabaseService {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     
     this.db.data.heartbeats = this.db.data.heartbeats.filter(
-      h => new Date(h.timestamp) > thirtyDaysAgo
+      (h: HeartbeatRecord) => new Date(h.timestamp) > thirtyDaysAgo
     );
     
     await this.db.write();
@@ -55,7 +58,7 @@ export class DatabaseService {
   async getLastHeartbeat(): Promise<HeartbeatRecord | null> {
     await this.db.read();
     
-    if (!this.db.data) return null;
+    if (!this.db.data || !this.db.data.heartbeats) return null;
     
     const heartbeats = this.db.data.heartbeats;
     const lastHeartbeat = heartbeats[heartbeats.length - 1];
@@ -66,86 +69,73 @@ export class DatabaseService {
   async getHeartbeatsLastMonth(): Promise<HeartbeatRecord[]> {
     await this.db.read();
     
-    if (!this.db.data) return [];
+    if (!this.db.data || !this.db.data.heartbeats) return [];
     
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     
     return this.db.data.heartbeats.filter(
-      h => new Date(h.timestamp) > thirtyDaysAgo
+      (h: HeartbeatRecord) => new Date(h.timestamp) > thirtyDaysAgo
     );
   }
 
-async getUptimeData(days = 7): Promise<{ label: string; uptime: string }[]> {
-  await this.db.read();
+  async getUptimeData(days = 7): Promise<{ label: string; uptime: string }[]> {
+    await this.db.read();
 
-  // Controllo sicurezza database
-  if (!this.db.data || !this.db.data.heartbeats) {
-    return [];
-  }
-
-  const heartbeats = this.db.data.heartbeats;
-  const dailyCount: { [key: string]: number } = {};
-
-  // Inizializza giorni con date valide
-  for (let i = 0; i < days; i++) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    const dateKey = date.toISOString().split('T')[0];
-    
-    // dateKey è sempre una stringa valida qui
-    if (dateKey) {
-      dailyCount[dateKey] = 0;
+    // Controllo sicurezza database
+    if (!this.db.data || !this.db.data.heartbeats) {
+      return [];
     }
-  }
 
-  // Conta heartbeat con controlli espliciti
-  heartbeats.forEach(heartbeat => {
-    // Controllo che heartbeat e timestamp esistano
-    if (heartbeat && heartbeat.timestamp && typeof heartbeat.timestamp === 'string') {
-      const parts = heartbeat.timestamp.split('T');
+    const heartbeats = this.db.data.heartbeats;
+    const dailyCount: { [key: string]: number } = {};
+
+    // Inizializza giorni
+    for (let i = 0; i < days; i++) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateKey = date.toISOString().split('T')[0];
       
-      // Controllo che split abbia prodotto almeno un elemento
-      if (parts.length > 0 && parts[0]) {
-        const dateKey = parts[0];
-        
-        // Controllo che dateKey esista in dailyCount
-        if (dateKey in dailyCount) {
-          dailyCount[dateKey] = (dailyCount[dateKey] || 0) + 1;
-        }
+      if (dateKey) {
+        dailyCount[dateKey] = 0;
       }
     }
-  });
 
-  // Genera risultato con controlli sicuri
-  const expectedPerDay = 8640;
-  const result: { label: string; uptime: string }[] = [];
+    // Conta heartbeat con controlli espliciti
+    heartbeats.forEach((heartbeat: HeartbeatRecord) => {
+      if (heartbeat && heartbeat.timestamp && typeof heartbeat.timestamp === 'string') {
+        const parts = heartbeat.timestamp.split('T');
+        
+        if (parts.length > 0 && parts[0]) {
+          const dateKey = parts[0];
+          
+          if (dateKey in dailyCount) {
+            dailyCount[dateKey] = (dailyCount[dateKey] || 0) + 1;
+          }
+        }
+      }
+    });
 
-  // Itera solo su chiavi che sappiamo esistere
-  Object.keys(dailyCount).forEach(dateKey => {
-    const count = dailyCount[dateKey];
-    
-    // count è sempre un number qui perché l'abbiamo inizializzato
-    if (typeof count === 'number') {
+    // Genera risultato
+    const expectedPerDay = 8640;
+    const result: { label: string; uptime: string }[] = [];
+
+    Object.keys(dailyCount).forEach(dateKey => {
+      const count = dailyCount[dateKey] || 0;
       const uptimePercentage = Math.min((count / expectedPerDay) * 100, 100);
       result.push({
         label: dateKey,
         uptime: uptimePercentage.toFixed(1)
       });
-    }
-  });
+    });
 
-  // Ordina per data
-  result.sort((a, b) => a.label.localeCompare(b.label));
-
-  return result;
-}
-
+    result.sort((a, b) => a.label.localeCompare(b.label));
+    return result;
+  }
 
   async getStats() {
     await this.db.read();
     
-    // Controllo sicurezza per this.db.data
     if (!this.db.data) {
       return {
         totalHeartbeats: 0,
