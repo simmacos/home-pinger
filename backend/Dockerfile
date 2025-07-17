@@ -2,11 +2,13 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Installa dipendenze
+# Copia package files
 COPY package*.json ./
-RUN npm ci --only=production
 
-# Copia codice sorgente
+# Install dependencies
+RUN npm ci --omit=dev
+
+# Copia source code
 COPY . .
 
 # Compila TypeScript
@@ -18,5 +20,5 @@ RUN mkdir -p data
 # Esponi porta
 EXPOSE 3000
 
-# Avvia applicazione
-CMD ["npm", "start"]
+# Avvia con supporto ES Module
+CMD ["node", "--experimental-modules", "dist/server.js"]
