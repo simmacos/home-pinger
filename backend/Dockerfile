@@ -2,17 +2,18 @@ FROM node:18-alpine
 
 WORKDIR /app
 
+# Installa ts-node globalmente
+RUN npm install -g ts-node typescript
+
 # Copia package files
 COPY package*.json ./
+COPY tsconfig.json ./
 
-# Install dependencies
-RUN npm ci --omit=dev
+# Install ALL dependencies (incluso dev)
+RUN npm ci
 
 # Copia source code
 COPY . .
-
-# Compila TypeScript
-RUN npm run build
 
 # Crea directory per database
 RUN mkdir -p data
@@ -20,5 +21,5 @@ RUN mkdir -p data
 # Esponi porta
 EXPOSE 3000
 
-# Avvia con supporto ES Module
-CMD ["node", "--experimental-modules", "dist/server.js"]
+# Esegui direttamente con ts-node
+CMD ["ts-node", "src/server.ts"]
