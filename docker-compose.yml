@@ -1,12 +1,44 @@
-
 services:
+  # Frontend Dashboard
+  dashboard-frontend:
+    image: nginx:alpine
+    container_name: dashboard-frontend
+    ports:
+      - "8085:80"
+    volumes:
+      - ./public:/usr/share/nginx/html:ro  # ✅ Ora punta alla directory corretta
+    restart: unless-stopped
+
+  # Backend API
+  dashboard-backend:
+    build: ./backend
+    container_name: dashboard-backend
+    ports:
+      - "3000:3000"
+    environment:
+      - MQTT_HOST=mosquitto
+      - MQTT_PORT=1883
+      - MQTT_TOPIC=zona/benevento/heartbeat
+      - MQTT_USERNAME=esp32_token
+      - MQTT_PASSWORD=Bv2025!MqttP0w3r#Casa
+      - NODE_ENV=production
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - DOWNTIME_THRESHOLD=1200000
+    volumes:
+      - ./backend/src/data:/app/data  # Database persistente
+    depends_on:
+      - mosquitto
+    restart: unless-stopped
+
+  # MQTT Broker Sicuro
   mosquitto:
     image: eclipse-mosquitto:latest
-    container_name: mosquitto-test
+    container_name: mosquitto
     ports:
       - "1883:1883"
     volumes:
-      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/config:/mosquitto/config:ro
       - ./mosquitto/data:/mosquitto/data
       - ./mosquitto/log:/mosquitto/log
     restart: unless-stopped

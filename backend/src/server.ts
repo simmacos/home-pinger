@@ -18,7 +18,6 @@ const io = new Server(httpServer, {
   cors: { origin: process.env.CORS_ORIGIN || "*" }
 });
 
-app.use(express.static('public'));
 
 // Setup Services
 const db = new DatabaseService();
