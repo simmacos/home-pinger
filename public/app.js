@@ -1,6 +1,6 @@
 // URL del backend
-const API_BASE_URL = 'http://localhost:3000';
-const SOCKET_URL = 'http://localhost:3000';
+const API_BASE_URL = 'https://pinger-be.casacocchy.duckdns.org';
+const SOCKET_URL = 'https://pinger-be.casacocchy.duckdns.org';
 
 // Connessione Socket.io
 const socket = io(SOCKET_URL);

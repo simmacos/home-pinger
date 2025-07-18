@@ -15,9 +15,14 @@ import { MqttService } from './services/mqtt';
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: { origin: process.env.CORS_ORIGIN || "*" }
+  cors: { 
+    origin: [
+      "https://pinger.casacocchy.duckdns.org",
+      "https://pinger-be.casacocchy.duckdns.org"   
+    ],
+    credentials: true
+  }
 });
-
 
 // Setup Services
 const db = new DatabaseService();
@@ -29,7 +34,13 @@ const mqttService = new MqttService(db);
 mqttService.setSocketIO(io);
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: [
+    "https://pinger.casacocchy.duckdns.org",
+    "https://pinger-be.casacocchy.duckdns.org"
+  ],
+  credentials: true
+}));
 app.use(express.json());
 db.init();
 
