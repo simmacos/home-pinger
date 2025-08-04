@@ -18,9 +18,12 @@ const io = new Server(httpServer, {
   cors: { 
     origin: [
       "https://pinger.cocchy.casa",
-      "https://pinger-be.cocchy.casa"   
+      "https://pinger-be.cocchy.casa",
+      "http://localhost:8085",  // For local development
+      "http://localhost:3000"   // For local development
     ],
-    credentials: true
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
   }
 });
 
@@ -37,9 +40,13 @@ mqttService.setSocketIO(io);
 app.use(cors({
   origin: [
     "https://pinger.cocchy.casa",
-    "https://pinger-be.cocchy.casa"
+    "https://pinger-be.cocchy.casa",
+    "http://localhost:8085",  // For local development
+    "http://localhost:3000"   // For local development
   ],
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
 db.init();
