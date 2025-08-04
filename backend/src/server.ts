@@ -17,8 +17,8 @@ const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: { 
     origin: [
-      "https://pinger.casacocchy.duckdns.org",
-      "https://pinger-be.casacocchy.duckdns.org"   
+      "https://pinger.cocchy.casa",
+      "https://pinger-be.cocchy.casa"   
     ],
     credentials: true
   }
@@ -36,8 +36,8 @@ mqttService.setSocketIO(io);
 // Middleware
 app.use(cors({
   origin: [
-    "https://pinger.casacocchy.duckdns.org",
-    "https://pinger-be.casacocchy.duckdns.org"
+    "https://pinger.cocchy.casa",
+    "https://pinger-be.cocchy.casa"
   ],
   credentials: true
 }));
