@@ -202,7 +202,7 @@ export class MqttService {
     } catch (error) {
       console.error('❌ Errore salvataggio database:', error);
     }
-.
+
     if (this.io) {
       this.io.emit('heartbeat_received', {
         id: heartbeatRecord.id,
