@@ -132,13 +132,13 @@ export class MqttService {
   // Gestisce i messaggi MQTT ricevuti
   private handleMessage(topic: string, message: Buffer, packet: any): void {
     if (topic !== this.config.topic) {
-      console.log(`📨 Messaggio da topic sconosciuto: ${topic}`);
+      //console.log(`📨 Messaggio da topic sconosciuto: ${topic}`);
       return;
     }
 
     try {
       const rawData = message.toString();
-      console.log(`📬 Messaggio ricevuto: ${rawData}`);
+      //console.log(`📬 Messaggio ricevuto: ${rawData}`);
       
       const heartbeatData: HeartbeatData = JSON.parse(rawData);
       
@@ -192,18 +192,17 @@ export class MqttService {
       status: 'online'
     };
 
-    console.log(`💓 Heartbeat processato: ${data.device} #${data.counter}`);
-    console.log(`📡 ESP32 IP: ${data.ip}, RSSI: ${data.rssi}dBm`);
-    console.log(`⏱️ Uptime ESP32: ${Math.floor(data.uptime/1000)}s`);
+    //console.log(`💓 Heartbeat processato: ${data.device} #${data.counter}`);
+    //console.log(`📡 ESP32 IP: ${data.ip}, RSSI: ${data.rssi}dBm`);
+    //console.log(`⏱️ Uptime ESP32: ${Math.floor(data.uptime/1000)}s`);
 
     try {
       await this.db.saveHeartbeat(heartbeatRecord);
-      console.log(`💾 Heartbeat salvato nel database`);
+      //console.log(`💾 Heartbeat salvato nel database`);
     } catch (error) {
       console.error('❌ Errore salvataggio database:', error);
     }
-
-    // Socket.io rimane uguale...
+.
     if (this.io) {
       this.io.emit('heartbeat_received', {
         id: heartbeatRecord.id,
